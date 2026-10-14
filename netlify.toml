@@ -1,0 +1,17 @@
+# Netlify hosts only the React frontend (Netlify Functions can't run Django).
+# Deploy the Django API to Vercel, then set in Netlify's environment:
+#   VITE_API_URL = https://<your-api>.vercel.app
+# and on the Vercel API project:
+#   CORS_ALLOWED_ORIGINS = https://<your-site>.netlify.app
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Cache-Control = "no-store"
