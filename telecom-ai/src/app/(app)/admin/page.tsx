@@ -13,7 +13,9 @@ export default function AdminPage() {
     api<{ users: any[] }>("/api/admin/users").then((r) => setUsers(r.users)).catch((e) => setError(e.message));
     api<{ events: any[] }>("/api/admin/audit").then((r) => setAudit(r.events)).catch(() => undefined);
   };
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, []);
   const patch = async (body: Record<string, unknown>) => {
     try {
       await api("/api/admin/users", { method: "PATCH", body });

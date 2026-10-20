@@ -24,6 +24,7 @@
     "@aws-sdk/client-s3": "^3.1153.0",
     "@napi-rs/canvas": "^1.0.11",
     "@tesseract.js-data/eng": "^1.0.0",
+    "@vercel/functions": "^3.10.1",
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
