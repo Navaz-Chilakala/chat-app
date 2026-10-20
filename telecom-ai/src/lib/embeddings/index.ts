@@ -9,6 +9,8 @@ export interface EmbeddingProvider {
   dimensions: number;
   version: string;
   costPer1MTokens: number;
+  /** Whether vectors are worth storing in embedding_cache (false when recomputing is cheaper than a lookup). */
+  cacheable: boolean;
   embed(texts: string[]): Promise<{ vectors: number[][]; tokens: number }>;
 }
 
@@ -17,6 +19,7 @@ class LocalHashProvider implements EmbeddingProvider {
   model = "telecom-lexical-hash";
   version = LOCAL_HASH_VERSION;
   costPer1MTokens = 0;
+  cacheable = false;
   constructor(public dimensions: number) {}
   async embed(texts: string[]) {
     return { vectors: texts.map((t) => localHashEmbed(t, this.dimensions)), tokens: texts.reduce((n, t) => n + Math.ceil(t.length / 4), 0) };
@@ -27,6 +30,7 @@ class LocalHashProvider implements EmbeddingProvider {
 class OpenAICompatibleProvider implements EmbeddingProvider {
   provider = "openai-compatible";
   version = "1";
+  cacheable = true;
   constructor(
     private url: string,
     private apiKey: string,

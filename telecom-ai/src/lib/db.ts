@@ -84,6 +84,28 @@ export async function tx<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<
   }
 }
 
+/**
+ * Plain VACUUM on a dedicated connection without the request timeouts, so space left by replaced rows is
+ * reused instead of growing the files (size-capped plans such as Neon Free count file size). Best effort.
+ */
+export async function vacuum(tables: string[]): Promise<void> {
+  const url = env().DATABASE_URL;
+  const client = new pg.Client({
+    connectionString: url,
+    connectionTimeoutMillis: 10_000,
+    ssl: /localhost|127\.0\.0\.1/.test(url) || /sslmode=disable/.test(url) ? undefined : { rejectUnauthorized: false },
+  });
+  try {
+    await client.connect();
+    await client.query("SET statement_timeout = 0");
+    await client.query(`VACUUM (ANALYZE) ${tables.join(", ")}`);
+  } catch (err) {
+    logger.warn("db.vacuum_failed", { tables, error: (err as Error).message });
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 export async function closePool() {
   if (globalThis.__telecomPool) {
     await globalThis.__telecomPool.end();

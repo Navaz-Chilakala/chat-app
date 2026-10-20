@@ -9,7 +9,7 @@ import http from "node:http";
 import os from "node:os";
 import { drainQueue } from "../src/lib/ingest/runner";
 import "../src/lib/ingest/handlers";
-import { closePool, query } from "../src/lib/db";
+import { closePool, query, vacuum } from "../src/lib/db";
 import { migrate } from "../src/lib/migrate";
 import { ensureEmbeddingModel } from "../src/lib/embeddings";
 import { terminateOcr } from "../src/lib/ingest/ocr";
@@ -36,6 +36,8 @@ async function scheduleDueSyncs() {
 
 async function main() {
   if (process.env.AUTO_MIGRATE !== "false") await migrate();
+  // Reclaim rows left by earlier re-indexes or failed jobs before indexing more (size-capped databases).
+  await vacuum(["document_chunks", "document_sections", "embeddings", "embedding_cache"]);
   await ensureEmbeddingModel();
   logger.info("worker.start", { workerId, once });
   await enqueueStaleReindex();

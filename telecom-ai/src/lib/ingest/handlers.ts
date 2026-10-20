@@ -70,13 +70,17 @@ registerJobHandler("reembed", async (job) => {
       [modelId],
     );
     if (!rows.length) break;
-    const cached = new Map((await query<{ content_hash: string; embedding: string }>("SELECT content_hash, embedding::text AS embedding FROM embedding_cache WHERE model_id = $1 AND content_hash = ANY($2)", [modelId, rows.map((r) => r.content_hash)])).map((r) => [r.content_hash, r.embedding]));
+    const cached = new Map(
+      provider.cacheable
+        ? (await query<{ content_hash: string; embedding: string }>("SELECT content_hash, embedding::text AS embedding FROM embedding_cache WHERE model_id = $1 AND content_hash = ANY($2)", [modelId, rows.map((r) => r.content_hash)])).map((r) => [r.content_hash, r.embedding])
+        : [],
+    );
     const missing = rows.filter((r) => !cached.has(r.content_hash));
     for (let i = 0; i < missing.length; i += 64) {
       const batch = missing.slice(i, i + 64);
       const { vectors } = await provider.embed(batch.map((r) => `${r.heading_path ?? ""}\n${r.content}`.slice(0, 8000)));
       batch.forEach((r, k) => cached.set(r.content_hash, toVectorLiteral(vectors[k]!)));
-      await query(
+      if (provider.cacheable) await query(
         "INSERT INTO embedding_cache(content_hash, model_id, embedding) SELECT x.h, $1, x.v::vector FROM jsonb_to_recordset($2::jsonb) AS x(h text, v text) ON CONFLICT DO NOTHING",
         [modelId, JSON.stringify(batch.map((r) => ({ h: r.content_hash, v: cached.get(r.content_hash) })))],
       );

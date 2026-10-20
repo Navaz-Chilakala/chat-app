@@ -70,9 +70,14 @@ describe("ingestion pipeline (Postgres + pgvector)", () => {
     expect(versions.map((x) => [x.status, x.is_current])).toEqual([["superseded", false], ["indexed", true]]);
     const oldCurrent = await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM document_chunks WHERE version_id = $1 AND is_current", [a.versionId]);
     expect(oldCurrent!.n).toBe(0);
-    const usage = await query<{ texts: number; cache_hits: number }>("SELECT texts, cache_hits FROM embedding_usage ORDER BY id");
-    expect(usage[1]!.cache_hits).toBeGreaterThan(0); // unchanged chunks reused
-    expect(usage[1]!.texts).toBeLessThan(usage[0]!.texts + 1);
+    // local-hash vectors are recomputed rather than cached, so the cache never duplicates them.
+    const cache = await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM embedding_cache");
+    expect(cache!.n).toBe(0);
+    const missing = await queryOne<{ n: number }>(
+      "SELECT count(*)::int AS n FROM document_chunks c WHERE c.version_id = $1 AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.chunk_id = c.id)",
+      [b.versionId],
+    );
+    expect(missing!.n).toBe(0);
   });
 
   it("OCRs a scanned PDF page so its text becomes searchable", async () => {
