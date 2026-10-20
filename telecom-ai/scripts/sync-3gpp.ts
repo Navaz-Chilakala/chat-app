@@ -31,7 +31,11 @@ const job = await queryOne<{ id: string }>("INSERT INTO ingestion_jobs(workspace
 console.log(`Sync job ${job!.id} for series ${JSON.stringify(config.series)}${specs ? `, ${specs.length} spec(s)` : ""}`);
 await drainQueue({ kinds: ["sync_source"], maxJobs: 1 });
 const run = await queryOne<{ status: string; stats: unknown; error: string | null }>("SELECT status, stats, error FROM source_sync_runs WHERE source_id = $1 ORDER BY started_at DESC LIMIT 1", [src.id]);
-console.log("Sync result:", JSON.stringify(run));
+console.log("Sync result:", JSON.stringify(run, null, 2));
+const events = await query<{ level: string; message: string }>("SELECT level, message FROM ingestion_job_events WHERE job_id = $1 AND level IN ('warn','error') ORDER BY id LIMIT 30", [job!.id]);
+for (const e of events) console.log(`[${e.level}] ${e.message}`);
+const queued = await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM ingestion_jobs WHERE kind = 'index_version' AND status = 'queued'");
+console.log(`Index jobs queued: ${queued?.n ?? 0}`);
 if (!args.includes("--no-index")) console.log(`Indexed ${await drainQueue({ kinds: ["index_version"] })} document version(s)`);
 await terminateOcr();
 await closePool();
