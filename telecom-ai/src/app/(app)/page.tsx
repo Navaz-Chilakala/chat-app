@@ -66,7 +66,11 @@ export default function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns]);
+  // Block body on purpose: newer browsers return a Promise from scrollIntoView, and an effect must not return
+  // anything except a cleanup function (React would try to call the Promise on the next update).
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns]);
 
   const openConversation = async (id: string) => {
     const r = await api<{ messages: { id: string; role: string; content: string; answer: AnswerData | null }[] }>(`/api/conversations/${id}`);

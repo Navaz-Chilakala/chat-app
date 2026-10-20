@@ -16,7 +16,9 @@ export default function KnowledgePage() {
     api("/api/stats").then(setStats).catch((e) => setError(e.message));
     api<{ documents: any[]; total: number }>(`/api/documents?limit=100${q ? `&q=${encodeURIComponent(q)}` : ""}`).then((r) => { setDocs(r.documents); setTotal(r.total); }).catch((e) => setError(e.message));
   };
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const t = stats?.totals;
   const queue = Object.fromEntries((stats?.queue ?? []).map((r: any) => [r.status, r.n]));
   return (

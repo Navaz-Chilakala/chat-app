@@ -14,7 +14,9 @@ export default function SettingsPage() {
     api("/api/settings/embeddings").then(setData).catch((e) => setError(e.message));
     api("/api/auth/me").then(setMe);
   };
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, []);
   return (
     <div>
       <PageHeader title="Settings" subtitle="Retrieval configuration, embedding models, OCR and your workspaces." />

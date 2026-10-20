@@ -24,8 +24,12 @@ export function Shell({ user, children }: { user: { displayName: string; email: 
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
-  useEffect(() => setDark(document.documentElement.classList.contains("dark")), []);
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+  useEffect(() => {
+    setOpen(false);
+  }, [path]);
   const toggleTheme = () => {
     const next = !dark;
     document.documentElement.classList.toggle("dark", next);
