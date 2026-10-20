@@ -13,6 +13,7 @@ import { closePool, query } from "../src/lib/db";
 import { migrate } from "../src/lib/migrate";
 import { ensureEmbeddingModel } from "../src/lib/embeddings";
 import { terminateOcr } from "../src/lib/ingest/ocr";
+import { enqueueStaleReindex } from "../src/lib/ingest/pipeline";
 import { logger, errorMessage } from "../src/lib/logger";
 
 const once = process.argv.includes("--once");
@@ -37,6 +38,7 @@ async function main() {
   if (process.env.AUTO_MIGRATE !== "false") await migrate();
   await ensureEmbeddingModel();
   logger.info("worker.start", { workerId, once });
+  await enqueueStaleReindex();
   if (process.env.WORKER_HEALTH_PORT) {
     http
       .createServer((_, res) => {

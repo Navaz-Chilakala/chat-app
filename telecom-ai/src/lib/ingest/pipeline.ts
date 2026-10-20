@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import { processFile } from "./process";
 import { CHUNKER_VERSION, type ChunkResult } from "./types";
 import { sha256 } from "./hash";
-import { heartbeat, jobEvent, type JobRow } from "./queue";
+import { enqueueJob, heartbeat, jobEvent, type JobRow } from "./queue";
 import { embeddingProvider, ensureEmbeddingModel, toVectorLiteral } from "../embeddings";
 import { compareVersions, parseCover, tagsForSpec } from "../telecom/spec";
 import { safeFetch } from "../security/ssrf";
@@ -56,6 +56,25 @@ async function loadBytes(v: VersionRow): Promise<Buffer> {
     return res.body;
   }
   throw new PermanentError("Version has neither stored original nor source URL");
+}
+
+/**
+ * Re-index current zip deliverables (3GPP specs) that were built by an older chunker, so extraction fixes
+ * reach documents whose original has not changed. Idempotent: at most one live job per version.
+ */
+export async function enqueueStaleReindex(): Promise<number> {
+  const rows = await query<{ id: string; workspace_id: string; byte_size: number | null }>(
+    `SELECT v.id, d.workspace_id, v.byte_size FROM document_versions v JOIN documents d ON d.id = v.document_id
+     WHERE v.is_current AND v.status = 'indexed' AND v.original_filename ILIKE '%.zip'
+       AND v.chunker_version IS DISTINCT FROM $1
+       AND NOT EXISTS (SELECT 1 FROM ingestion_jobs j WHERE j.document_version_id = v.id AND j.status IN ('queued','running'))`,
+    [CHUNKER_VERSION],
+  );
+  for (const r of rows) {
+    await enqueueJob({ workspaceId: r.workspace_id, kind: "index_version", documentVersionId: r.id, byteSize: r.byte_size ?? 0, priority: 3 });
+  }
+  if (rows.length) logger.info("ingest.stale_reindex_queued", { count: rows.length, chunkerVersion: CHUNKER_VERSION });
+  return rows.length;
 }
 
 export async function indexVersion(job: JobRow): Promise<Record<string, unknown>> {
