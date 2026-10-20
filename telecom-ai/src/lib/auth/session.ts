@@ -70,9 +70,10 @@ export async function registerUser(email: string, password: string, displayName:
     await client.query("SELECT pg_advisory_xact_lock(727002)"); // serialise "first user is admin"
     const count = (await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM users", [], client))!.n;
     const e = env();
-    if (count > 0 && e.SIGNUP_MODE === "invite") {
+    if (e.SIGNUP_MODE === "invite") {
+      // The allowlist also applies to the first account, so nobody else can claim admin on a public URL.
       const allowed = e.ALLOWED_SIGNUP_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-      if (!allowed.includes(email.toLowerCase())) throw new Error("SIGNUP_NOT_ALLOWED");
+      if ((count > 0 || allowed.length) && !allowed.includes(email.toLowerCase())) throw new Error("SIGNUP_NOT_ALLOWED");
     }
     const exists = await queryOne("SELECT 1 FROM users WHERE email = $1", [email], client);
     if (exists) throw new Error("EMAIL_TAKEN");

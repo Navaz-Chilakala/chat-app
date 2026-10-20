@@ -37,7 +37,7 @@ Environment variables (Production + Preview):
 | `DATABASE_URL` | yes | pooled Postgres URL (injected by the Neon/Supabase integration) |
 | `SESSION_SECRET` | yes | ≥ 32 random characters |
 | `CRON_SECRET` | recommended | Vercel Cron sends it as a bearer token to `/api/cron/process` |
-| `SIGNUP_MODE` / `ALLOWED_SIGNUP_EMAILS` | recommended | `invite` + comma-separated emails to restrict sign-up (first user is always admin) |
+| `SIGNUP_MODE` / `ALLOWED_SIGNUP_EMAILS` | recommended | `invite` + comma-separated emails to restrict sign-up (applies to the first account too; the first account becomes admin) |
 | `STORAGE_DRIVER` + `S3_*` | optional | `db` (default) stores originals in Postgres; use `s3` for R2/S3/Supabase Storage |
 | `EMBEDDING_PROVIDER` + `EMBEDDING_*` | optional | default `local-hash` (offline); `openai-compatible` for a neural endpoint — must match the worker |
 | `URL_INGEST_ALLOWED_HOSTS` | optional | restrict URL ingestion to listed hosts |
