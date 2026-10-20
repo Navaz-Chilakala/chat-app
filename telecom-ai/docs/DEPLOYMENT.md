@@ -36,6 +36,7 @@ Environment variables (Production + Preview):
 |---|---|---|
 | `DATABASE_URL` | yes | pooled Postgres URL (injected by the Neon/Supabase integration) |
 | `SESSION_SECRET` | yes | ≥ 32 random characters |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | recommended | bootstrap administrator, created (bcrypt-hashed) on first sign-in if missing; an existing account's password is never overwritten — change it in Settings |
 | `CRON_SECRET` | recommended | Vercel Cron sends it as a bearer token to `/api/cron/process` |
 | `SIGNUP_MODE` / `ALLOWED_SIGNUP_EMAILS` | recommended | `invite` + comma-separated emails to restrict sign-up (applies to the first account too; the first account becomes admin) |
 | `STORAGE_DRIVER` + `S3_*` | optional | `db` (default) stores originals in Postgres; use `s3` for R2/S3/Supabase Storage |

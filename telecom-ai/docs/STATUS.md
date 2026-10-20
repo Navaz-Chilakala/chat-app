@@ -35,6 +35,18 @@ development sandbox's network policy**, so 12 of 15 cases were *skipped (spec no
 These numbers come from a tiny evaluable set and say little about quality on the real 3GPP corpus. Re-run `npm run eval`
 after `npm run sync:3gpp -- --priority` for meaningful figures.
 
+## Deployment status
+
+| Item | Status |
+|---|---|
+| GitHub | branch `claude/serene-dijkstra-kstf1h` pushed |
+| Vercel project | `telecom-knowledge-ai` (Root Directory `telecom-ai`) created; production deployment `dpl_5TWhWEZX7CrpG3rSHj4WP8krteo3` **READY** at https://telecom-knowledge-ai.vercel.app |
+| Env vars set | `SESSION_SECRET`, `CRON_SECRET`, `SIGNUP_MODE=invite`, `ALLOWED_SIGNUP_EMAILS`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` |
+| Database | **not yet connected** — create a Neon (or Supabase) database in the Vercel project's Storage tab and redeploy; until then the app serves `/setup` |
+| Worker | not deployed — use the GitHub Actions workflow (secret `TELECOM_DATABASE_URL`) or `Dockerfile.worker` |
+| Deployed-page verification | **not performed from the build environment** (its network policy blocks `*.vercel.app`, and the Vercel connection lacked log/bypass permissions for the team scope). Verify with `GET /api/health` after connecting the database. |
+| Deployment Protection | Vercel Authentication is enabled on the project by default; disable it (Settings → Deployment Protection) to make the app's own login page publicly reachable |
+
 ## Known limitations
 
 - **3GPP corpus not yet downloaded**: the sync code (listing parser, robots.txt, version selection, checksum-verified

@@ -27,7 +27,7 @@ cd telecom-ai
 npm install
 cp .env.example .env            # set DATABASE_URL and SESSION_SECRET (≥ 32 chars)
 npm run db:seed                 # migrations + Commons workspace + source registry + eval cases
-npm run dev                     # web app on http://localhost:3000 (first account = admin)
+npm run dev                     # web app on http://localhost:3000 (first account = admin, or set ADMIN_USERNAME/ADMIN_PASSWORD)
 npm run worker                  # background worker (separate terminal) — indexes uploads, syncs sources
 ```
 
