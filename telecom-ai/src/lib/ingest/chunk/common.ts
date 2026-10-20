@@ -78,10 +78,19 @@ export function packUnits(units: string[], overlapLastUnit = true): string[] {
   return out;
 }
 
+/** Multi-paragraph cell -> one markdown-safe line: paragraphs separated by "; " unless already punctuated. */
+export function joinCellLines(cell: string): string {
+  return cell
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .reduce((acc, s) => (!acc ? s : /[;:,.]$/.test(acc) ? `${acc} ${s}` : `${acc}; ${s}`), "");
+}
+
 export function rowsToMarkdown(rows: string[][]): string {
   if (!rows.length) return "";
   const width = Math.max(...rows.map((r) => r.length));
-  const norm = rows.map((r) => [...r, ...Array(width - r.length).fill("")].map((c) => c.replace(/\|/g, "\\|")));
+  const norm = rows.map((r) => [...r, ...Array(width - r.length).fill("")].map((c) => joinCellLines(c).replace(/\|/g, "\\|")));
   const [head, ...body] = norm;
   return [`| ${head!.join(" | ")} |`, `| ${head!.map(() => "---").join(" | ")} |`, ...body.map((r) => `| ${r.join(" | ")} |`)].join("\n");
 }

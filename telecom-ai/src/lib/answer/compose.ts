@@ -63,6 +63,47 @@ export function citeLabel(e: Evidence): string {
   return e.title;
 }
 
+const HISTORY_RE = /\b(change|revision|document) history\b/i;
+/** Change-history / revision tables mention every identifier ever touched; they never answer a question. */
+function isHistory(e: Evidence): boolean {
+  return HISTORY_RE.test(e.headingPath ?? "") || HISTORY_RE.test(e.content.slice(0, 120));
+}
+
+/** Split a markdown table chunk ("Table x: caption" line optional) into header and body cells. */
+export function parseMarkdownTable(content: string): { caption: string | null; header: string[]; rows: string[][] } | null {
+  const lines = content.split("\n");
+  const caption = lines[0] && !lines[0].startsWith("|") ? lines[0] : null;
+  const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+  const rows = lines.filter((l) => l.trim().startsWith("|") && !/^\|\s*-{3}/.test(l.trim())).map(cells);
+  if (rows.length < 2) return null;
+  return { caption, header: rows[0]!, rows: rows.slice(1) };
+}
+
+const normId = (s: string) => s.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+
+/**
+ * "What is T3510?": the row of a definition table (timers, causes, messages) whose first cell is the asked
+ * identifier, rendered as "header: cell" pairs. Cells are verbatim; only the column labels are added.
+ */
+export function identifierRows(evidence: Evidence[], strongIdentifiers: string[]): Statement[] {
+  const wanted = strongIdentifiers.filter((i) => /^(timer|msg|ie|cause|state):/.test(i)).map((i) => normId(i.split(":").slice(1).join(":")));
+  if (!wanted.length) return [];
+  const out: Statement[] = [];
+  for (const e of evidence) {
+    if (e.chunkType !== "table" || isHistory(e)) continue;
+    const t = parseMarkdownTable(e.content);
+    if (!t) continue;
+    for (const row of t.rows) {
+      const key = normId(row[0] ?? "");
+      if (!wanted.some((w) => key === w || (key.startsWith(w) && !/^\d/.test(key.slice(w.length))))) continue;
+      const pairs = row.slice(1).map((c, i) => (c ? `${t.header[i + 1] || `Column ${i + 2}`}: ${c}` : "")).filter(Boolean);
+      if (pairs.length) out.push({ text: `${row[0]} — ${pairs.join(" · ")}`, citations: [e.n], kind: "definition" });
+    }
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
 interface ScoredSentence {
   text: string;
   evidence: Evidence;
@@ -87,7 +128,7 @@ export function scoreSentences(queryText: string, evidence: Evidence[], extraTer
   const qIds = new Set(extractIdentifiers(queryText, { bareSpecNumbers: true }).filter((i) => !i.startsWith("spec:")));
   const sentences: ScoredSentence[] = [];
   for (const e of evidence) {
-    if (e.chunkType === "code" || e.chunkType === "config" || e.flags.includes("suspicious_instructions") || e.flags.includes("boilerplate")) continue;
+    if (e.chunkType === "code" || e.chunkType === "config" || e.flags.includes("suspicious_instructions") || e.flags.includes("boilerplate") || isHistory(e)) continue;
     const units = e.chunkType === "table" || e.chunkType === "abbreviation" || e.chunkType.startsWith("api_") ? e.content.split("\n") : e.content.split("\n").flatMap(splitSentences);
     for (const raw of units) {
       const text = raw.trim();
@@ -176,6 +217,7 @@ export function compose(input: {
   if (unknownIdentifierTerms.length) gaps.push(`These terms do not occur anywhere in the indexed knowledge base: ${unknownIdentifierTerms.join(", ")}.`);
 
   const ranked = scoreSentences(a.normalized, ev, expansionTerms);
+  const leadRows = identifierRows(ev, a.strongIdentifiers);
   let top = coverageSelect(ranked, 4, 1.2);
   const bestScore = ranked[0]?.score ?? 0;
 
@@ -198,7 +240,7 @@ export function compose(input: {
     kind: "note" as const,
   }));
 
-  if (a.injectionLike || unknownIdentifierTerms.length > 0 || (!codeSummary.length && (!ev.length || !top.length))) {
+  if (a.injectionLike || unknownIdentifierTerms.length > 0 || (!codeSummary.length && !leadRows.length && (!ev.length || !top.length))) {
     return {
       status: "insufficient_evidence",
       confidence: "low",
@@ -281,21 +323,23 @@ export function compose(input: {
     sections.push({ id: "failures", title: "Failure and abnormal cases", statements: failures.map((s) => toStatement(s)) });
   }
 
-  // Identifiers present in the evidence (messages, IEs, timers, interfaces, services)
+  // Identifiers present in the evidence (messages, IEs, timers, interfaces, services, states)
   const idMap = new Map<string, Set<number>>();
-  for (const e of ev) for (const id of e.identifiers) if (/^(msg|timer|ie|svc|if|cause):/.test(id)) {
+  for (const e of ev) if (!isHistory(e)) for (const id of e.identifiers) if (/^(msg|timer|ie|svc|if|cause|state):/.test(id)) {
     if (!idMap.has(id)) idMap.set(id, new Set());
     idMap.get(id)!.add(e.n);
   }
-  const KIND: Record<string, string> = { msg: "Message", timer: "Timer", ie: "Information element", svc: "SBI service operation", if: "Interface / reference point", cause: "Cause value" };
+  const KIND: Record<string, string> = { msg: "Message", timer: "Timer", ie: "Information element", svc: "SBI service operation", if: "Interface / reference point", cause: "Cause value", state: "State" };
   const idItems = [...idMap]
     .sort((x, y) => y[1].size - x[1].size)
     .slice(0, 24)
     .map(([id, ns]) => ({ label: id.split(":").slice(1).join(":"), detail: KIND[id.split(":")[0]!] ?? id.split(":")[0]!, citations: [...ns].sort((p, q) => p - q) }));
   if (idItems.length) sections.push({ id: "identifiers", title: "Messages, IEs, timers and interfaces mentioned in the evidence", items: idItems });
 
-  // Tables
-  for (const e of ev.filter((x) => x.chunkType === "table").slice(0, 2)) {
+  // Tables (a table holding the asked identifier's own row first; change-history tables never)
+  const leadTables = new Set(leadRows.flatMap((s) => s.citations));
+  const tables = ev.filter((x) => x.chunkType === "table" && !isHistory(x)).sort((x, y) => Number(leadTables.has(y.n)) - Number(leadTables.has(x.n)));
+  for (const e of tables.slice(0, 2)) {
     const caption = e.content.startsWith("Table") ? e.content.split("\n")[0]! : null;
     sections.push({ id: `table-${e.n}`, title: caption ?? `Table from ${citeLabel(e)}`, table: { caption, markdown: caption ? e.content.split("\n").slice(1).join("\n") : e.content, citation: e.n } });
   }
@@ -339,7 +383,9 @@ export function compose(input: {
   return {
     status: gaps.some((g) => g.startsWith("TS/TR") || g.includes("not indexed")) || confidence === "low" ? "partial" : "answered",
     confidence,
-    summary: codeSummary.length ? [...codeSummary, ...top.filter((t) => t.evidence.authorityTier <= 2).slice(0, 2).map((s) => toStatement(s))] : top.map((s) => toStatement(s)),
+    summary: codeSummary.length
+      ? [...codeSummary, ...top.filter((t) => t.evidence.authorityTier <= 2).slice(0, 2).map((s) => toStatement(s))]
+      : [...leadRows, ...top.map((s) => toStatement(s))].slice(0, 5),
     sections,
     compare,
     flow: input.flow,

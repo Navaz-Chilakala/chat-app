@@ -76,3 +76,48 @@ describe("query analysis", () => {
     expect(analyzeQuery("Compare LTE attach with 5G registration").generation).toBe("both");
   });
 });
+
+describe("3GPP tables, covers and answer leads", () => {
+  it("keeps the paragraphs of a table cell apart instead of gluing words together", async () => {
+    const { extractHtml } = await import("@/lib/ingest/extract/html");
+    const { rowsToMarkdown } = await import("@/lib/ingest/chunk/common");
+    const doc = extractHtml(
+      "<table><tr><td><p>TIMER NUM.</p></td><td><p>TIMER VALUE</p></td><td><p>STATE</p></td></tr>" +
+        "<tr><td><p>T3510</p></td><td><p>15s</p><p>NOTE 7</p><p>In WB-N1/CE mode, 85s</p></td>" +
+        "<td><p>5GMM-DEREGISTERED.ATTEMPTING-REGISTRATION</p><p>5GMM-REGISTERED.ATTEMPTING-REGISTRATION-UPDATE</p></td></tr></table>",
+    );
+    const rows = doc.blocks[0]!.rows!;
+    expect(rows[1]![1]).toBe("15s\nNOTE 7\nIn WB-N1/CE mode, 85s");
+    const md = rowsToMarkdown(rows);
+    expect(md).toContain("| T3510 | 15s; NOTE 7; In WB-N1/CE mode, 85s | 5GMM-DEREGISTERED.ATTEMPTING-REGISTRATION; 5GMM-REGISTERED.ATTEMPTING-REGISTRATION-UPDATE |");
+  });
+
+  it("reads the title from covers laid out as one run of text or as table cells", () => {
+    const oneLine = parseCover("3GPP TS 24.501 V20.1.0 (2026-09) | Technical Specification | 3rd Generation Partnership Project;Technical Specification Group Core Network and Terminals;Non-Access-Stratum (NAS) protocol for 5G System (5GS);Stage 3(Release 20)");
+    expect(oneLine?.title).toBe("Non-Access-Stratum (NAS) protocol for 5G System (5GS);Stage 3");
+    const cells = parseCover("3GPP TS 23.501 V20.3.0 (2026-09)\nTechnical Specification\n3rd Generation Partnership Project;\nTechnical Specification Group Services and System Aspects;\nSystem architecture for the 5G System (5GS);\nStage 2\n(Release 20)");
+    expect(cells?.title).toBe("System architecture for the 5G System (5GS); Stage 2");
+    expect(cells?.release).toBe(20);
+  });
+
+  it("labels NAS states as states, not as information elements", () => {
+    const ids = extractIdentifiers("enter 5GMM-REGISTERED.ATTEMPTING-REGISTRATION-UPDATE or 5GMM-DEREGISTERED and include the RAN-UE-NGAP-ID");
+    expect(ids).toEqual(expect.arrayContaining(["state:5gmm-registered.attempting-registration-update", "state:5gmm-deregistered", "ie:ran-ue-ngap-id"]));
+    expect(ids).not.toContain("ie:attempting-registration-update");
+  });
+
+  it("leads with the asked identifier's own table row and ignores change-history tables", async () => {
+    const { identifierRows } = await import("@/lib/answer/compose");
+    const ev = (n: number, content: string, headingPath: string) =>
+      ({ n, chunkType: "table", content, headingPath, identifiers: [], flags: [] }) as unknown as import("@/lib/retrieval/search").Evidence;
+    const history = ev(1, "| Date | Meeting | CR | Subject |\n| --- | --- | --- | --- |\n| T3510 | CT#113 | 7218 | Clarification on T3510 timer |", "Annex F (informative): Change history");
+    const timers = ev(
+      2,
+      "Table 10.2.1: Timers of 5GS mobility management – UE side\n| TIMER NUM. | TIMER VALUE | CAUSE OF START |\n| --- | --- | --- |\n| T3502 | Default 12 min. | At registration failure |\n| T3510 | 15s; NOTE 7 | Transmission of REGISTRATION REQUEST message |",
+      "10 List of system parameters > 10.2 Timers of 5GS mobility management",
+    );
+    const rows = identifierRows([history, timers], ["timer:t3510"]);
+    expect(rows).toEqual([{ text: "T3510 — TIMER VALUE: 15s; NOTE 7 · CAUSE OF START: Transmission of REGISTRATION REQUEST message", citations: [2], kind: "definition" }]);
+    expect(identifierRows([timers], ["timer:t351"])).toEqual([]);
+  });
+});

@@ -4,6 +4,7 @@ import { MAX_TOKENS, makeChunk, packUnits, rowsToMarkdown } from "./common";
 
 const CLAUSE_RE = /^((?:[A-Z]\.)?\d{1,2}(?:\.\d{1,3}){0,8})\s+(.+)$/;
 const ANNEX_RE = /^Annex\s+([A-Z]{1,2})\b\s*(.*)$/i;
+export const HISTORY_RE = /\b(change|revision|document) history\b/i;
 const BOILERPLATE_RE = /^(foreword|copyright notification|intellectual property rights|legal notice|modal verbs terminology|contents|keywords)$/i;
 
 interface OpenSection {
@@ -54,7 +55,7 @@ export function chunkDocument(doc: ExtractedDocument, opts: DocumentChunkOptions
     if (!units.length) return;
     const headingPath = [opts.docLabel, ...sec.path].filter(Boolean).join(" > ");
     const heading = sec.draft.heading;
-    const boilerplate = BOILERPLATE_RE.test(heading.trim()) || sec.draft.level === 0;
+    const boilerplate = BOILERPLATE_RE.test(heading.trim()) || HISTORY_RE.test(heading) || sec.draft.level === 0;
     const isDefinitions = /^definitions\b/i.test(heading) || /^terms and definitions/i.test(heading);
     const isAbbrev = /^abbreviations\b/i.test(heading) || /^symbols and abbreviations/i.test(heading);
     const isReferences = /^(normative )?references$/i.test(heading.trim());
