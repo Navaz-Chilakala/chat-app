@@ -8,7 +8,8 @@ import { createDocumentVersion, deleteDocument, setReviewStatus } from "@/lib/in
 import { drainQueue } from "@/lib/ingest/runner";
 import "@/lib/ingest/handlers";
 import { ensureCommonsWorkspace } from "@/lib/sources/registry";
-import { registerUser } from "@/lib/auth/session";
+import { ensureBootstrapAdmin, registerUser, verifyPassword } from "@/lib/auth/session";
+import { resetEnvCache } from "@/lib/env";
 import { readableWorkspaceIds, userWorkspaces } from "@/lib/auth/access";
 import { ask } from "@/lib/answer/engine";
 import { hybridSearch } from "@/lib/retrieval/search";
@@ -170,5 +171,32 @@ describe("retrieval, answers and access control", () => {
     expect((await hybridSearch("walrus-otter procedure", { workspaceIds: bobWs })).evidence.some((e) => e.content.includes("walrus-otter"))).toBe(false);
     await setReviewStatus(pending.documentId, "approved", alice.id);
     expect((await hybridSearch("walrus-otter procedure", { workspaceIds: bobWs })).evidence.some((e) => e.content.includes("walrus-otter"))).toBe(true);
+  });
+});
+
+describe("bootstrap administrator", () => {
+  it("creates the env-configured admin once, by username, without overwriting a changed password", async () => {
+    process.env.ADMIN_USERNAME = "NavazTest";
+    process.env.ADMIN_PASSWORD = "Initial@1234";
+    process.env.SIGNUP_MODE = "invite";
+    resetEnvCache();
+    try {
+      await ensureBootstrapAdmin();
+      await ensureBootstrapAdmin(); // idempotent
+      const u = await queryOne<{ id: string; is_admin: boolean; email: string | null; password_hash: string }>("SELECT id, is_admin, email, password_hash FROM users WHERE username = 'navaztest'");
+      expect(u).toMatchObject({ is_admin: true, email: null });
+      expect(await verifyPassword("Initial@1234", u!.password_hash)).toBe(true);
+      expect((await userWorkspaces(u!.id)).find((w) => w.kind === "shared")?.role).toBe("owner");
+      await query("UPDATE users SET password_hash = 'changed' WHERE id = $1", [u!.id]);
+      await ensureBootstrapAdmin();
+      expect((await queryOne<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = $1", [u!.id]))!.password_hash).toBe("changed");
+      // Invite mode with an admin configured: strangers cannot self-register, even as the "first" signup.
+      await expect(registerUser("stranger@example.com", "password-123456", "Stranger")).rejects.toThrow("SIGNUP_NOT_ALLOWED");
+    } finally {
+      delete process.env.ADMIN_USERNAME;
+      delete process.env.ADMIN_PASSWORD;
+      delete process.env.SIGNUP_MODE;
+      resetEnvCache();
+    }
   });
 });

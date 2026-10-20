@@ -59,6 +59,27 @@ export default function SettingsPage() {
             </>
           )}
         </Card>
+        <Card title="Change password">
+          <form
+            className="space-y-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              setError(null);
+              try {
+                await api("/api/auth/password", { body: { currentPassword: f.get("current"), newPassword: f.get("next") } });
+                setMsg("Password changed. Other sessions were signed out.");
+                (e.target as HTMLFormElement).reset();
+              } catch (err) {
+                setError((err as Error).message);
+              }
+            }}
+          >
+            <input className="input" name="current" type="password" placeholder="Current password" autoComplete="current-password" required />
+            <input className="input" name="next" type="password" placeholder="New password (at least 10 characters)" autoComplete="new-password" minLength={10} required />
+            <button className="btn btn-primary">Update password</button>
+          </form>
+        </Card>
         <Card title="Your workspaces">
           <ul className="space-y-1 text-sm">{(me?.workspaces ?? []).map((w: any) => <li key={w.id} className="flex justify-between"><span>{w.name}</span><span className="flex gap-1"><Badge>{w.kind}</Badge><Badge tone="blue">{w.role}</Badge></span></li>)}</ul>
         </Card>

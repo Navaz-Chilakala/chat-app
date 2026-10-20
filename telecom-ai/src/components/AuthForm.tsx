@@ -22,7 +22,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           setBusy(true);
           setError(null);
           try {
-            await api(mode === "login" ? "/api/auth/login" : "/api/auth/signup", { body: mode === "login" ? { email, password } : { email, password, displayName } });
+            await api(mode === "login" ? "/api/auth/login" : "/api/auth/signup", { body: mode === "login" ? { identifier: email, password } : { email, password, displayName } });
             router.push("/");
             router.refresh();
           } catch (err) {
@@ -47,13 +47,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             </label>
           )}
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">Email</span>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <span className="mb-1 block font-medium">{mode === "login" ? "Username or email" : "Email"}</span>
+            <input className="input" type={mode === "login" ? "text" : "email"} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete={mode === "login" ? "username" : "email"} autoCapitalize="none" />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Password</span>
             <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "signup" ? 10 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
-            {mode === "signup" && <span className="muted mt-1 block text-xs">At least 10 characters. The first account becomes the administrator.</span>}
+            {mode === "signup" && <span className="muted mt-1 block text-xs">At least 10 characters.</span>}
           </label>
           <ErrorNote error={error} />
           <button className="btn btn-primary w-full justify-center" disabled={busy}>{busy && <Spinner />} {mode === "login" ? "Sign in" : "Create account"}</button>

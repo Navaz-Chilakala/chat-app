@@ -10,7 +10,7 @@ const SESSION_DAYS = 30;
 
 export interface SessionUser {
   id: string;
-  email: string;
+  email: string; // email, or the username for username-only accounts
   displayName: string;
   isAdmin: boolean;
 }
@@ -49,7 +49,7 @@ export async function currentUser(): Promise<SessionUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || token.length > 200) return null;
   const row = await queryOne<{ id: string; email: string; display_name: string; is_admin: boolean }>(
-    `SELECT u.id, u.email, u.display_name, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, COALESCE(u.email::text, u.username::text) AS email, u.display_name, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL`,
     [hashToken(token)],
   );
@@ -63,24 +63,32 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
-/** Register a user. The first user becomes admin. Every user joins the shared Commons and gets a personal workspace. */
-export async function registerUser(email: string, password: string, displayName: string): Promise<SessionUser> {
+/**
+ * Register a user. The first user becomes admin (or anyone created with `forceAdmin`). Every user joins the
+ * shared Commons and gets a personal workspace. Pass an email, a username, or both.
+ */
+export async function registerUser(
+  email: string | null,
+  password: string,
+  displayName: string,
+  opts: { username?: string | null; forceAdmin?: boolean; bypassInvite?: boolean } = {},
+): Promise<SessionUser> {
   const commons = await ensureCommonsWorkspace();
   return tx(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(727002)"); // serialise "first user is admin"
     const count = (await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM users", [], client))!.n;
     const e = env();
-    if (e.SIGNUP_MODE === "invite") {
+    if (e.SIGNUP_MODE === "invite" && !opts.bypassInvite) {
       // The allowlist also applies to the first account, so nobody else can claim admin on a public URL.
       const allowed = e.ALLOWED_SIGNUP_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-      if ((count > 0 || allowed.length) && !allowed.includes(email.toLowerCase())) throw new Error("SIGNUP_NOT_ALLOWED");
+      if ((count > 0 || allowed.length || e.ADMIN_USERNAME) && !(email && allowed.includes(email.toLowerCase()))) throw new Error("SIGNUP_NOT_ALLOWED");
     }
-    const exists = await queryOne("SELECT 1 FROM users WHERE email = $1", [email], client);
+    const exists = await queryOne("SELECT 1 FROM users WHERE ($1::citext IS NOT NULL AND email = $1) OR ($2::citext IS NOT NULL AND username = $2)", [email, opts.username ?? null], client);
     if (exists) throw new Error("EMAIL_TAKEN");
-    const isAdmin = count === 0;
+    const isAdmin = opts.forceAdmin || (count === 0 && !e.ADMIN_USERNAME);
     const user = (await queryOne<{ id: string }>(
-      "INSERT INTO users(email, password_hash, display_name, is_admin) VALUES ($1,$2,$3,$4) RETURNING id",
-      [email, await hashPassword(password), displayName, isAdmin],
+      "INSERT INTO users(email, username, password_hash, display_name, is_admin) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+      [email, opts.username ?? null, await hashPassword(password), displayName, isAdmin],
       client,
     ))!;
     await query("INSERT INTO workspace_memberships(workspace_id, user_id, role) VALUES ($1,$2,$3)", [commons, user.id, isAdmin ? "owner" : "viewer"], client);
@@ -90,7 +98,26 @@ export async function registerUser(email: string, password: string, displayName:
       client,
     ))!;
     await query("INSERT INTO workspace_memberships(workspace_id, user_id, role) VALUES ($1,$2,'owner')", [personal.id, user.id], client);
-    await query("INSERT INTO audit_events(user_id, action, data) VALUES ($1,'user.registered',$2)", [user.id, { isAdmin }], client);
-    return { id: user.id, email, displayName, isAdmin };
+    await query("INSERT INTO audit_events(user_id, action, data) VALUES ($1,'user.registered',$2)", [user.id, { isAdmin, viaUsername: !email }], client);
+    return { id: user.id, email: email ?? opts.username ?? "", displayName, isAdmin };
   });
+}
+
+/**
+ * Create the administrator named by ADMIN_USERNAME / ADMIN_PASSWORD if it does not exist yet.
+ * Never overwrites an existing account's password (so a password changed in the app stays changed).
+ */
+export async function ensureBootstrapAdmin(): Promise<void> {
+  const e = env();
+  if (!e.ADMIN_USERNAME || !e.ADMIN_PASSWORD) return;
+  const existing = await queryOne<{ id: string; is_admin: boolean }>("SELECT id, is_admin FROM users WHERE username = $1", [e.ADMIN_USERNAME]);
+  if (existing) {
+    if (!existing.is_admin) await query("UPDATE users SET is_admin = true WHERE id = $1", [existing.id]);
+    return;
+  }
+  try {
+    await registerUser(null, e.ADMIN_PASSWORD, e.ADMIN_USERNAME, { username: e.ADMIN_USERNAME, forceAdmin: true, bypassInvite: true });
+  } catch (err) {
+    if ((err as Error).message !== "EMAIL_TAKEN") throw err; // concurrent bootstrap
+  }
 }

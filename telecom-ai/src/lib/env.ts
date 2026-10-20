@@ -23,6 +23,8 @@ const schema = z.object({
   GITHUB_TOKEN: z.string().optional().default(""),
   SIGNUP_MODE: z.enum(["open", "invite"]).default("open"),
   ALLOWED_SIGNUP_EMAILS: z.string().optional().default(""),
+  ADMIN_USERNAME: z.string().trim().max(80).optional().default(""),
+  ADMIN_PASSWORD: z.string().max(200).optional().default(""),
   DB_POOL_MAX: z.coerce.number().int().positive().default(5),
 });
 

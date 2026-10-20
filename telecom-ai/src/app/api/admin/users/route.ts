@@ -7,7 +7,7 @@ export const GET = route(async () => {
   await requireAdmin();
   const commons = await ensureCommonsWorkspace();
   const users = await query(
-    `SELECT u.id, u.email, u.display_name, u.is_admin, u.disabled_at, u.created_at, m.role AS commons_role
+    `SELECT u.id, COALESCE(u.email::text, '@' || u.username::text) AS email, u.display_name, u.is_admin, u.disabled_at, u.created_at, m.role AS commons_role
      FROM users u LEFT JOIN workspace_memberships m ON m.user_id = u.id AND m.workspace_id = $1 ORDER BY u.created_at`,
     [commons],
   );
