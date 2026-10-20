@@ -12,6 +12,7 @@ import { ensureCommonsWorkspace, seedSources } from "../src/lib/sources/registry
 import { PRIORITY_SPECS } from "../src/lib/sources/threegpp";
 import { drainQueue } from "../src/lib/ingest/runner";
 import { terminateOcr } from "../src/lib/ingest/ocr";
+import { enqueueStaleReindex } from "../src/lib/ingest/pipeline";
 import "../src/lib/ingest/handlers";
 
 const args = process.argv.slice(2);
@@ -34,6 +35,8 @@ const run = await queryOne<{ status: string; stats: unknown; error: string | nul
 console.log("Sync result:", JSON.stringify(run, null, 2));
 const events = await query<{ level: string; message: string }>("SELECT level, message FROM ingestion_job_events WHERE job_id = $1 AND level IN ('warn','error') ORDER BY id LIMIT 30", [job!.id]);
 for (const e of events) console.log(`[${e.level}] ${e.message}`);
+const reindexed = await enqueueStaleReindex();
+if (reindexed) console.log(`Re-index jobs queued for ${reindexed} version(s) built by an older chunker`);
 const queued = await queryOne<{ n: number }>("SELECT count(*)::int AS n FROM ingestion_jobs WHERE kind = 'index_version' AND status = 'queued'");
 console.log(`Index jobs queued: ${queued?.n ?? 0}`);
 if (!args.includes("--no-index")) console.log(`Indexed ${await drainQueue({ kinds: ["index_version"] })} document version(s)`);

@@ -6,7 +6,8 @@ import { chunkCode, languageForPath } from "@/lib/ingest/chunk/code";
 import { chunkOpenApi, parseStructured } from "@/lib/ingest/chunk/openapi";
 import { extractMarkdown, extractPlainText } from "@/lib/ingest/extract/plaintext";
 import { extractHtml } from "@/lib/ingest/extract/html";
-import { sniffFormat, looksBinary, processFile } from "@/lib/ingest/process";
+import { sniffFormat, looksBinary, processFile, unpackSpecZip, mergeExtracted } from "@/lib/ingest/process";
+import { zipSync } from "fflate";
 import { localHashEmbed } from "@/lib/embeddings/local-hash";
 import { packUnits, MAX_TOKENS } from "@/lib/ingest/chunk/common";
 import { estimateTokens } from "@/lib/ingest/types";
@@ -100,4 +101,41 @@ describe("OCR", () => {
     expect(fig.flags).toContain("ocr");
     await terminateOcr();
   }, 120_000);
+});
+
+describe("multi-part 3GPP deliverables", () => {
+  it("returns every document part in natural clause order and skips other files", () => {
+    const docx = new Uint8Array(fs.readFileSync(path.join(__dirname, "fixtures/synthetic-spec.docx")));
+    const zip = Buffer.from(zipSync({
+      "24501-k10_s10-s11.docx": docx,
+      "24501-k10_s00-s0805.docx": docx,
+      "24501-k10_s0806-s09.docx": docx,
+      "readme.txt": new TextEncoder().encode("x"),
+    }));
+    const { parts, others } = unpackSpecZip(zip);
+    expect(parts.map((p) => p.name)).toEqual(["24501-k10_s00-s0805.docx", "24501-k10_s0806-s09.docx", "24501-k10_s10-s11.docx"]);
+    expect(others).toEqual(["readme.txt"]);
+  });
+
+  it("merges parts with monotonic page numbers and the first part's cover", () => {
+    const merged = mergeExtracted([
+      { blocks: [{ type: "para", text: "cover", page: 1 }], pageCount: 3, warnings: ["w"], head: "COVER", format: "pdf", ocrPages: { 2: 80 } },
+      { blocks: [{ type: "para", text: "T3510 start", page: 1 }], pageCount: 2, warnings: ["w"], head: "PART2", format: "pdf" },
+    ]);
+    expect(merged.blocks.map((b) => [b.text, b.page])).toEqual([["cover", 1], ["T3510 start", 4]]);
+    expect(merged.pageCount).toBe(5);
+    expect(merged.head).toBe("COVER");
+    expect(merged.warnings).toEqual(["w"]);
+    expect(merged.ocrPages).toEqual({ 2: 80 });
+  });
+
+  it("indexes the content of all parts, not only the largest file", async () => {
+    const docx = fs.readFileSync(path.join(__dirname, "fixtures/synthetic-spec.docx"));
+    const single = await processFile(docx, "synthetic-spec.docx");
+    const zip = Buffer.from(zipSync({ "99999-k10_s00-s05.docx": new Uint8Array(docx), "99999-k10_s06-s10.docx": new Uint8Array(docx) }));
+    const multi = await processFile(zip, "99999-k10.zip");
+    expect(multi.format).toBe("docx");
+    expect(multi.innerFilename).toBe("99999-k10_s00-s05.docx + 99999-k10_s06-s10.docx");
+    expect(multi.result.chunks.length).toBeGreaterThan(single.result.chunks.length * 1.5);
+  }, 240_000);
 });

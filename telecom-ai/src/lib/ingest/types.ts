@@ -99,7 +99,7 @@ export interface ChunkResult {
   warnings: string[];
 }
 
-export const CHUNKER_VERSION = "2026.10.1";
+export const CHUNKER_VERSION = "2026.10.2";
 
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
