@@ -24,32 +24,49 @@ export interface ThreeGppConfig {
   limit?: number; // cap new versions per run
 }
 
-/** Parse an HTTP directory listing into child entry names (directories end with "/"). */
+/**
+ * Parse an HTTP directory listing into child entries. Works with Apache/IIS/nginx-style listings and with
+ * listings whose directory links have no trailing slash (as on the 3GPP file server): an entry without a
+ * file extension is treated as a directory.
+ */
 export function parseDirectoryListing(html: string, baseUrl: string): { name: string; url: string; isDir: boolean }[] {
-  const base = new URL(baseUrl);
+  const base = new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   const out = new Map<string, { name: string; url: string; isDir: boolean }>();
   for (const m of html.matchAll(/<a\s[^>]*href\s*=\s*["']([^"'#?]+)["']/gi)) {
     let abs: URL;
     try {
-      abs = new URL(m[1]!, base);
+      abs = new URL(m[1]!.trim(), base);
     } catch {
       continue;
     }
-    if (abs.origin !== base.origin || !abs.pathname.startsWith(base.pathname) || abs.pathname === base.pathname) continue;
+    if (abs.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "")) continue;
+    const basePath = base.pathname.toLowerCase();
+    const absPath = abs.pathname.toLowerCase();
+    if (!absPath.startsWith(basePath) || absPath === basePath || `${absPath}/` === basePath) continue;
     const rest = decodeURIComponent(abs.pathname.slice(base.pathname.length));
-    if (!rest || rest.includes("/", 0) && !/^[^/]+\/$/.test(rest)) continue; // direct children only
-    const isDir = rest.endsWith("/");
+    if (!rest || !/^[^/]+\/?$/.test(rest)) continue; // direct children only
     const name = rest.replace(/\/$/, "");
     if (name === ".." || name === ".") continue;
+    const isDir = rest.endsWith("/") || !/\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{2,5}$/.test(name);
     out.set(name, { name, url: abs.toString(), isDir });
   }
   return [...out.values()];
 }
 
+/** First few hrefs on a page, for diagnosing unexpected listing formats in job logs. */
+function sampleHrefs(html: string): string[] {
+  return [...html.matchAll(/<a\s[^>]*href\s*=\s*["']([^"']+)["']/gi)].slice(0, 12).map((m) => m[1]!);
+}
+
+let lastListing: { url: string; finalUrl: string; status: number; sample: string[]; bytes: number } | null = null;
+
 async function list(url: string) {
   const res = await safeFetch(url, { maxBytes: 8 * 1024 * 1024, timeoutMs: 60_000, userAgent: USER_AGENT, accept: "text/html" });
   if (res.status !== 200) throw new Error(`Listing ${url} failed: HTTP ${res.status}`);
-  return parseDirectoryListing(res.body.toString("utf8"), url.endsWith("/") ? url : `${url}/`);
+  const html = res.body.toString("utf8");
+  lastListing = { url, finalUrl: res.url, status: res.status, sample: sampleHrefs(html), bytes: res.body.length };
+  // Resolve links against the final URL after redirects (e.g. a trailing-slash redirect).
+  return parseDirectoryListing(html, res.url || url);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -68,7 +85,13 @@ export async function syncThreeGpp(job: JobRow, source: { id: string; workspace_
     for (const series of cfg.series ?? ["23"]) {
       const entries = await list(`${base}${series}_series/`);
       stats.seriesListed++;
-      for (const e of entries) if (e.isDir && /^\d{2}\.\d{3}(-\d+)?$/.test(e.name) && (!wanted.size || wanted.has(e.name))) specDirs.push({ spec: e.name, url: e.url });
+      const before = specDirs.length;
+      for (const e of entries) if (/^\d{2}\.\d{3}(-\d+)?$/.test(e.name) && (!wanted.size || wanted.has(e.name))) specDirs.push({ spec: e.name, url: e.url.endsWith("/") ? e.url : `${e.url}/` });
+      if (specDirs.length === before) {
+        const msg = `${series}_series: no matching spec directories in listing (${entries.length} entries parsed). Diagnostics: ${JSON.stringify(lastListing)}`;
+        await jobEvent(job.id, "warn", "list", msg);
+        console.warn(msg);
+      }
       await sleep(delay);
       if ((await heartbeat(job.id, `list ${series}_series`, 0.02)).cancel) throw new CancelledError("Cancelled by user");
     }
@@ -84,8 +107,15 @@ export async function syncThreeGpp(job: JobRow, source: { id: string; workspace_
         const { spec, url } = specDirs[idx++]!;
         stats.specsSeen++;
         try {
-          const files = (await list(url)).filter((f) => !f.isDir).map((f) => ({ ...f, info: parseSpecFilename(f.name) })).filter((f) => f.info && f.info.specNumber === spec);
-          if (!files.length) continue;
+          const entries = await list(url);
+          const files = entries.map((f) => ({ ...f, info: parseSpecFilename(f.name) })).filter((f) => f.info && f.info.specNumber === spec);
+          if (!files.length) {
+            stats.failed++;
+            const msg = `${spec}: no version files found in listing (${entries.length} entries). Diagnostics: ${JSON.stringify(lastListing)}`;
+            if (stats.failures.length < 50) stats.failures.push(msg.slice(0, 500));
+            console.warn(msg);
+            continue;
+          }
           files.sort((a, b) => compareVersions(b.info!.version, a.info!.version));
           const latest = files[0]!;
           const docKey = `3gpp:${spec}`;

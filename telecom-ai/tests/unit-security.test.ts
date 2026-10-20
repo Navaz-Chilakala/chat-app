@@ -42,6 +42,16 @@ describe("robots.txt and 3GPP listing parsing", () => {
     expect(entries.map((e) => e.name).sort()).toEqual(["23.401", "23.501", "23.502"]);
     expect(entries.every((e) => e.isDir)).toBe(true);
   });
+  it("treats extension-less links without a trailing slash as directories and keeps files", () => {
+    const html = `<table><tr><td><a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.501">23.501</a></td></tr>
+      <tr><td><a href="/ftp/Specs/archive/23_series/23.502">23.502</a></td></tr>
+      <tr><td><a href="https://3gpp.org/ftp/Specs/archive/23_series/23.401">23.401</a></td></tr>
+      <tr><td><a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.502/23502-j40.zip">deep file</a></td></tr></table>`;
+    const dirs = parseDirectoryListing(html, "https://www.3gpp.org/ftp/Specs/archive/23_series");
+    expect(dirs.map((e) => [e.name, e.isDir]).sort()).toEqual([["23.401", true], ["23.501", true], ["23.502", true]]);
+    const files = parseDirectoryListing(`<a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.502/23502-j40.zip">23502-j40.zip</a><a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.502/23502-j30.zip">x</a>`, "https://www.3gpp.org/ftp/Specs/archive/23_series/23.502");
+    expect(files.map((f) => [f.name, f.isDir])).toEqual([["23502-j40.zip", false], ["23502-j30.zip", false]]);
+  });
 });
 
 describe("OpenAPI validators", () => {
