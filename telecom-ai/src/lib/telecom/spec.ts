@@ -66,21 +66,22 @@ export interface CoverInfo {
 
 /** Parse the cover block of a 3GPP deliverable from its first ~3000 characters of text. */
 export function parseCover(text: string): CoverInfo | null {
-  const head = text.slice(0, 4000);
+  const head = text.slice(0, 8000);
   const m = /3GPP\s+(TS|TR)\s+(\d{2}\.\d{3}(?:-\d+)?)\s+V(\d+\.\d+\.\d+)\s*(?:\((\d{4}-\d{2})\))?/.exec(head);
   if (!m) return null;
   const rel = /Release\s+(\d{1,2})\b/.exec(head);
-  // Title: the lines between "Technical Specification Group ..." and "(Release NN)".
+  // Title: the text between "Technical Specification Group <name>;" and "(Release NN)". The group name ends at
+  // the first ";" or line break, so covers laid out as one run of text (e.g. inside a table) also parse.
   let title: string | null = null;
-  const t = /Technical Specification Group[^\n]*\n([\s\S]{5,600}?)\(Release\s+\d+\)/.exec(head);
+  const t = /Technical Specification Group[^;\n]*(?:;|\n)([\s\S]{5,600}?)\(Release\s+\d+\)/.exec(head.slice(m.index));
   if (t) {
     title = t[1]!
-      .split("\n")
+      .split(/\n| \| /)
       .map((l) => l.trim())
-      .filter((l) => l && !/^Technical Specification Group/.test(l))
+      .filter((l) => l && !/^Technical Specification Group/.test(l) && !/^3GPP\b/.test(l))
       .join(" ")
       .replace(/\s+/g, " ")
-      .replace(/;\s*$/, "")
+      .replace(/^[;\s]+|[;\s]+$/g, "")
       .trim();
   }
   return {

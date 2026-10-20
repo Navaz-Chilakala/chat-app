@@ -3,6 +3,23 @@ import type { CheerioAPI, Cheerio } from "cheerio";
 import type { AnyNode } from "domhandler";
 import type { Block, ExtractedDocument } from "../types";
 
+const flat = (s: string) => s.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * A cell's paragraphs, one per line. Concatenating them blindly glues words together
+ * ("15s" + "NOTE 7" -> "15sNOTE 7"), which corrupts quotes, identifiers and cover-page parsing.
+ */
+function cellText($: CheerioAPI, td: Cheerio<AnyNode>): string {
+  // Innermost paragraph-like elements only, so a <li> wrapping a <p> is not counted twice.
+  const paras = td.find("p, li").filter((_, el) => $(el).find("p, li").length === 0);
+  if (!paras.length) return flat(td.text());
+  return paras
+    .toArray()
+    .map((el) => flat($(el).text()))
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function tableToRows($: CheerioAPI, table: Cheerio<AnyNode>): string[][] {
   const rows: string[][] = [];
   table.find("tr").each((_, tr) => {
@@ -10,7 +27,7 @@ export function tableToRows($: CheerioAPI, table: Cheerio<AnyNode>): string[][] 
     $(tr)
       .children("td,th")
       .each((__, td) => {
-        cells.push($(td).text().replace(/ /g, " ").replace(/\s+/g, " ").trim());
+        cells.push(cellText($, $(td)));
       });
     if (cells.some((c) => c)) rows.push(cells);
   });

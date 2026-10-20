@@ -27,6 +27,8 @@ const CAMEL_RE = /\b[A-Z][a-z0-9]+(?:[A-Z]+[a-z0-9]*){2,}\b|\b[A-Z]{2,}[a-z]+(?:
 // Two-hump names count as messages only when they end in a message word (RegistrationRequest, ServiceAccept).
 const MSG_WORDS = "Request|Response|Accept|Reject|Complete|Command|Message|Indication|Failure|Notification|Acknowledge|Ack|Answer|Transfer|Setup|Release|Update|Modification|Report|Confirm";
 const CAMEL2_RE = new RegExp(`\\b[A-Z][a-z0-9]+(?:${MSG_WORDS})\\b`, "g");
+// NAS / RRC state names (5GMM-REGISTERED.ATTEMPTING-REGISTRATION-UPDATE, EMM-DEREGISTERED, RRC_CONNECTED).
+const STATE_RE = /\b(?:5GMM|5GSM|EMM|ESM|GMM|MM)-[A-Z][A-Z-]*(?:\.[A-Z][A-Z-]*[A-Z])?\b|\bRRC_(?:IDLE|INACTIVE|CONNECTED)\b/g;
 const HYPHEN_IE_RE = /\b[A-Z][A-Za-z0-9]*(?:-[A-Z0-9][A-Za-z0-9]*){2,}\b/g;
 const MSG_SUFFIX = "MESSAGE|REQUEST|RESPONSE|ACCEPT|REJECT|COMPLETE|COMMAND|FAILURE|INDICATION|ACKNOWLEDGE|NOTIFICATION|TRANSFER|TRANSPORT|SETUP|RELEASE|MODIFICATION|UPDATE|CONFIRM";
 const UPPER_MSG_RE = new RegExp(`\\b(?:[A-Z0-9][A-Z0-9-]{1,}\\s+){1,6}(?:${MSG_SUFFIX})\\b`, "g");
@@ -70,7 +72,16 @@ export function extractIdentifiers(text: string, opts: ExtractOptions = {}): str
   }
   for (const m of text.matchAll(CAMEL2_RE)) out.add(`msg:${normaliseMessageName(m[0])}`);
   if (opts.bareSpecNumbers) for (const id of queryPhraseIdentifiers(text)) out.add(id);
-  for (const m of text.matchAll(HYPHEN_IE_RE)) out.add(`ie:${m[0].toLowerCase()}`);
+  const stateSpans: [number, number][] = [];
+  for (const m of text.matchAll(STATE_RE)) {
+    out.add(`state:${m[0].toLowerCase()}`);
+    stateSpans.push([m.index!, m.index! + m[0].length]);
+  }
+  for (const m of text.matchAll(HYPHEN_IE_RE)) {
+    // Parts of a state name (the ATTEMPTING-REGISTRATION-UPDATE in 5GMM-REGISTERED.ATTEMPTING-...) are not IEs.
+    if (stateSpans.some(([s, e]) => m.index! >= s && m.index! < e)) continue;
+    out.add(`ie:${m[0].toLowerCase()}`);
+  }
   for (const m of text.matchAll(UPPER_MSG_RE)) {
     const words = m[0].trim().split(/\s+/).filter((w) => !COMMON_UPPER_WORDS.has(w));
     if (words.length >= 2) out.add(`msg:${normaliseMessageName(words.join(""))}`);
