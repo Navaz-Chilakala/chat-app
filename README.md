@@ -85,3 +85,11 @@ Then:
 | GET/POST | `/api/purge` | Bearer `CRON_SECRET` | Daily cleanup hook |
 
 Real-time updates use polling, because Vercel and Netlify serverless functions don't support WebSockets.
+
+---
+
+## Telecom Knowledge AI (`telecom-ai/`)
+
+This repository also contains **Telecom Knowledge AI**, a separate Next.js application for evidence-grounded
+retrieval over 3GPP specifications, telecom source code and API schemas (no LLM; extractive answers with citations).
+See [`telecom-ai/README.md`](telecom-ai/README.md). It deploys as its own Vercel project with Root Directory `telecom-ai`.

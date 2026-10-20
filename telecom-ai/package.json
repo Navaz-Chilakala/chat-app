@@ -1,0 +1,60 @@
+{
+  "name": "telecom-knowledge-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "worker": "tsx worker/index.ts",
+    "ingest:file": "tsx scripts/ingest-file.ts",
+    "sync:3gpp": "tsx scripts/sync-3gpp.ts",
+    "eval": "tsx scripts/eval.ts",
+    "vercel-build": "node scripts/vercel-build.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1153.0",
+    "@napi-rs/canvas": "^1.0.11",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "ajv": "^8.20.0",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "dompurify": "^3.4.17",
+    "fflate": "^0.8.3",
+    "highlight.js": "^11.12.0",
+    "ipaddr.js": "^2.5.0",
+    "mammoth": "^1.13.0",
+    "marked": "^18.1.1",
+    "mermaid": "^12.2.0",
+    "next": "^16.4.2",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tar": "^7.5.22",
+    "tesseract.js": "^7.0.0",
+    "undici": "^7.30.1",
+    "unpdf": "^1.9.1",
+    "word-extractor": "^1.0.4",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

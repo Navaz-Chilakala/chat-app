@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #d9eaff;
+  --color-brand-500: #2f7cf6;
+  --color-brand-600: #1f64db;
+  --color-brand-700: #1a50b0;
+  --color-ink-950: #0b1220;
+  --color-ink-900: #111a2e;
+  --color-ink-800: #1a2540;
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f6f8fb;
+  --panel: #ffffff;
+  --border: #e3e8ef;
+  --muted: #5b6577;
+  --text: #111827;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --panel: #111a2e;
+  --border: #22304d;
+  --muted: #94a3b8;
+  --text: #e5e7eb;
+}
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+.muted {
+  color: var(--muted);
+}
+.hairline {
+  border-color: var(--border);
+}
+.input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 20%, transparent);
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  transition: background 0.15s;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--color-brand-500) 8%, var(--panel));
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--color-brand-700);
+}
+.btn-danger {
+  color: #b42318;
+}
+.prose-quote {
+  border-left: 3px solid var(--color-brand-500);
+  padding-left: 0.75rem;
+}
+.hljs-keyword, .hljs-built_in { color: #c678dd; }
+.hljs-string { color: #98c379; }
+.hljs-number, .hljs-literal { color: #d19a66; }
+.hljs-comment { color: #7f848e; font-style: italic; }
+.hljs-title, .hljs-function .hljs-title { color: #61afef; }
+.hljs-type, .hljs-class .hljs-title { color: #e5c07b; }
+.hljs-attr, .hljs-property { color: #e06c75; }
