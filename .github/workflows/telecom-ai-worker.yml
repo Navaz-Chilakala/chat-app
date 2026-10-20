@@ -1,0 +1,39 @@
+# Runs the ingestion worker on GitHub-hosted runners (open internet, up to 6 h per run).
+# Useful when no container worker is deployed, and for the initial 3GPP corpus download.
+# Required repository secret: TELECOM_DATABASE_URL (pooled or direct Postgres URL with pgvector).
+name: telecom-ai worker
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      sync3gpp:
+        description: "Run a 3GPP archive sync first (all | priority | none)"
+        default: "none"
+        required: false
+concurrency:
+  group: telecom-ai-worker
+  cancel-in-progress: false
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: telecom-ai
+    env:
+      DATABASE_URL: ${{ secrets.TELECOM_DATABASE_URL }}
+      SESSION_SECRET: worker-does-not-issue-sessions-but-env-requires-32c
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: telecom-ai/package-lock.json
+      - run: npm ci
+      - name: Sync 3GPP specifications
+        if: github.event.inputs.sync3gpp == 'all' || github.event.inputs.sync3gpp == 'priority'
+        run: npm run sync:3gpp -- ${{ github.event.inputs.sync3gpp == 'priority' && '--priority' || '' }} --no-index
+      - name: Process the ingestion queue
+        run: timeout 20000 npm run worker -- --once || [ $? -eq 124 ]

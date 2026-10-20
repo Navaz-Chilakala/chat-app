@@ -1,0 +1,101 @@
+openapi: 3.0.0
+info:
+  title: Test NRF NFManagement (synthetic fixture)
+  version: 1.0.0-test
+  description: Synthetic fixture modelled on SBI conventions. See 3GPP TS 29.510 for the real API.
+externalDocs:
+  description: 3GPP TS 29.510 V18.4.0; 5G System; Network Function Repository Services; Stage 3
+  url: https://www.3gpp.org/ftp/Specs/archive/29_series/29.510/
+servers:
+  - url: '{apiRoot}/nnrf-nfm/v1'
+    variables:
+      apiRoot:
+        default: https://example.com
+security:
+  - oAuth2ClientCredentials: [nnrf-nfm]
+paths:
+  /nf-instances/{nfInstanceID}:
+    parameters:
+      - name: nfInstanceID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Register a new NF Instance
+      operationId: RegisterNFInstance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NFProfile'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NFProfile'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: 'TS29571_CommonData.yaml#/components/schemas/ProblemDetails'
+    get:
+      summary: Read the profile of a given NF Instance
+      operationId: GetNFInstance
+      parameters:
+        - name: requester-features
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NFProfile'
+components:
+  securitySchemes:
+    oAuth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: '{nrfApiRoot}/oauth2/token'
+          scopes:
+            nnrf-nfm: Access to the nnrf-nfm API
+  responses:
+    '400':
+      description: Bad request
+  schemas:
+    NFProfile:
+      type: object
+      required: [nfInstanceId, nfType, nfStatus]
+      properties:
+        nfInstanceId:
+          type: string
+          format: uuid
+        nfType:
+          $ref: '#/components/schemas/NFType'
+        nfStatus:
+          type: string
+          enum: [REGISTERED, SUSPENDED, UNDISCOVERABLE]
+        heartBeatTimer:
+          type: integer
+        plmnList:
+          type: array
+          items:
+            type: object
+            properties:
+              mcc: { type: string }
+              mnc: { type: string }
+    NFType:
+      type: string
+      enum: [NRF, UDM, AMF, SMF, AUSF]

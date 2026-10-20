@@ -1,0 +1,37 @@
+name: telecom-ai CI
+on:
+  push:
+    paths: ["telecom-ai/**", ".github/workflows/telecom-ai-ci.yml"]
+  pull_request:
+    paths: ["telecom-ai/**", ".github/workflows/telecom-ai-ci.yml"]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telecom-ai
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: telecom
+          POSTGRES_PASSWORD: telecom
+          POSTGRES_DB: telecom_ai_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U telecom" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://telecom:telecom@localhost:5432/telecom_ai_test
+      DATABASE_URL: postgres://telecom:telecom@localhost:5432/telecom_ai_test
+      SESSION_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-1234
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: telecom-ai/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx next build
