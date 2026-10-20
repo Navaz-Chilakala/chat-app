@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { query, queryOne, tx } from "../db";
+import { query, queryOne, tx, vacuum } from "../db";
 import { storage } from "../storage";
 import { processFile } from "./process";
 import { CHUNKER_VERSION, type ChunkResult } from "./types";
@@ -148,6 +148,7 @@ export async function indexVersion(job: JobRow): Promise<Record<string, unknown>
   }
   const tags = [...new Set([...(v.tags ?? []), ...tagsForSpec(specNumber, title)])];
   const docIdents = specNumber ? [`spec:${specNumber}`] : [];
+  const replacing = !!(await queryOne("SELECT 1 FROM document_chunks WHERE version_id = $1 LIMIT 1", [v.id]));
   const chunkIds = await tx(async (client) => {
     // Idempotent retry: clear anything a previous failed attempt wrote for this version.
     await query("DELETE FROM document_sections WHERE version_id = $1", [v.id], client);
@@ -225,13 +226,13 @@ export async function indexVersion(job: JobRow): Promise<Record<string, unknown>
     return ids;
   });
 
-  // ---- embeddings (content-hash cache: unchanged text is never re-embedded) ----
+  // ---- embeddings (content-hash cache for remote providers: unchanged text is never re-embedded) ----
   const provider = embeddingProvider();
   const modelId = await ensureEmbeddingModel(provider);
   const texts = result.chunks.map((c) => `${c.headingPath ?? ""}\n${c.content}`.slice(0, MAX_EMBED_CHARS));
   const hashes = result.chunks.map((c) => sha256(`${c.headingPath ?? ""}\n${c.content}`));
   const cached = new Map<string, string>();
-  for (let i = 0; i < hashes.length; i += 1000) {
+  for (let i = 0; provider.cacheable && i < hashes.length; i += 1000) {
     const rows = await query<{ content_hash: string; embedding: string }>(
       "SELECT content_hash, embedding::text AS embedding FROM embedding_cache WHERE model_id = $1 AND content_hash = ANY($2)",
       [modelId, hashes.slice(i, i + 1000)],
@@ -246,7 +247,7 @@ export async function indexVersion(job: JobRow): Promise<Record<string, unknown>
     const { vectors, tokens: t } = await provider.embed(batchTexts);
     tokens += t;
     const payload = batchHashes.map((h, k) => ({ h, v: toVectorLiteral(vectors[k]!), t: Math.ceil(batchTexts[k]!.length / 4) }));
-    await query(
+    if (provider.cacheable) await query(
       `INSERT INTO embedding_cache(content_hash, model_id, embedding, token_count)
        SELECT x.h, $1, x.v::vector, x.t FROM jsonb_to_recordset($2::jsonb) AS x(h text, v text, t int) ON CONFLICT DO NOTHING`,
       [modelId, JSON.stringify(payload)],
@@ -311,6 +312,8 @@ export async function indexVersion(job: JobRow): Promise<Record<string, unknown>
     }
   });
   logger.info("ingest.indexed", { jobId: job.id, versionId: v.id, chunks: result.chunks.length });
+  // A re-index leaves the previous chunks, sections and vectors as dead rows; make that space reusable now.
+  if (replacing) await vacuum(["document_chunks", "document_sections", "embeddings"]);
   return { chunks: result.chunks.length, sections: result.sections.length, embedded: toEmbed.length, cacheHits: hashes.length - toEmbed.length, pages: out.pageCount, title, version: versionLabel, warnings: metaWarnings.length };
 }
 
