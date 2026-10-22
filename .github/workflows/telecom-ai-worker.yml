@@ -30,7 +30,7 @@ jobs:
       SESSION_SECRET: worker-does-not-issue-sessions-but-env-requires-32c
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
