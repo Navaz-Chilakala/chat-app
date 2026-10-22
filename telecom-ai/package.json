@@ -42,7 +42,7 @@
     "react-dom": "^19.3.1",
     "tar": "^7.5.22",
     "tesseract.js": "^7.0.0",
-    "undici": "^7.30.1",
+    "undici": "^8.12.2",
     "unpdf": "^1.9.1",
     "word-extractor": "^1.0.4",
     "yaml": "^2.9.1",
