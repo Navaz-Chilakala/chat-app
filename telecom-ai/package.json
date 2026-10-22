@@ -17,6 +17,7 @@
     "worker": "tsx worker/index.ts",
     "ingest:file": "tsx scripts/ingest-file.ts",
     "sync:3gpp": "tsx scripts/sync-3gpp.ts",
+    "sync:sources": "tsx scripts/sync-sources.ts",
     "eval": "tsx scripts/eval.ts",
     "vercel-build": "node scripts/vercel-build.mjs"
   },
