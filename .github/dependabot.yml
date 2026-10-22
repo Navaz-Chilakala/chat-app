@@ -1,5 +1,6 @@
 # Weekly dependency update pull requests: npm packages of the Telecom Knowledge AI app and the
-# GitHub Actions used by its workflows. Minor/patch npm updates are grouped into one PR.
+# GitHub Actions used by its workflows. Minor/patch npm updates are grouped into one PR; major npm
+# versions (TypeScript, vitest, undici, ...) change APIs and are upgraded deliberately, not by bot.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -10,6 +11,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
