@@ -25,13 +25,15 @@ jobs:
       DATABASE_URL: postgres://telecom:telecom@localhost:5432/telecom_ai_test
       SESSION_SECRET: ci-secret-ci-secret-ci-secret-ci-secret-1234
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: telecom-ai/package-lock.json
       - run: npm ci
+      - name: Dependency audit (report only)
+        run: npm audit --omit=dev || true
       - run: npm run typecheck
       - run: npm test
       - run: npx next build

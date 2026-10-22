@@ -64,6 +64,8 @@ The worker needs outbound HTTPS to `www.3gpp.org` (3GPP sync), git hosts (reposi
 **GitHub Actions** (no server needed): add repository secret `TELECOM_DATABASE_URL`, then *Actions → telecom-ai worker → Run workflow*
 with `sync3gpp = priority` (or `all`). The workflow also runs every 6 hours to drain the queue. Each run is capped below GitHub's 6-hour limit;
 interrupted jobs are requeued automatically and the next run continues (registered versions are skipped, so syncs are resumable).
+Set `sources = openapi` to activate and sync the 5G Core OpenAPI definitions (official forge.3gpp.org repository, with the
+jdegre/5GC_APIs GitHub mirror as fallback), or any part of a seeded source name (e.g. `UERANSIM`); locally: `npm run sync:sources -- openapi`.
 
 ## Initial corpus
 

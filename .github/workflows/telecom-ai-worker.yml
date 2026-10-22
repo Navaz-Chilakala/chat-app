@@ -11,6 +11,10 @@ on:
         description: "Run a 3GPP archive sync first (all | priority | none)"
         default: "none"
         required: false
+      sources:
+        description: "Also activate and sync other seeded sources (openapi | part of a source name | none)"
+        default: "none"
+        required: false
 concurrency:
   group: telecom-ai-worker
   cancel-in-progress: false
@@ -25,8 +29,8 @@ jobs:
       DATABASE_URL: ${{ secrets.TELECOM_DATABASE_URL }}
       SESSION_SECRET: worker-does-not-issue-sessions-but-env-requires-32c
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -35,5 +39,10 @@ jobs:
       - name: Sync 3GPP specifications
         if: github.event.inputs.sync3gpp == 'all' || github.event.inputs.sync3gpp == 'priority'
         run: npm run sync:3gpp -- ${{ github.event.inputs.sync3gpp == 'priority' && '--priority' || '' }} --no-index
+      - name: Sync other sources
+        if: github.event.inputs.sources != '' && github.event.inputs.sources != 'none'
+        env:
+          SOURCES: ${{ github.event.inputs.sources }}
+        run: npm run sync:sources -- "$SOURCES"
       - name: Process the ingestion queue
         run: timeout 20000 npm run worker -- --once || [ $? -eq 124 ]
