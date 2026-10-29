@@ -22,10 +22,10 @@
     "vercel-build": "node scripts/vercel-build.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1153.0",
-    "@napi-rs/canvas": "^1.0.11",
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@napi-rs/canvas": "^1.0.13",
     "@tesseract.js-data/eng": "^1.0.0",
-    "@vercel/functions": "^3.10.1",
+    "@vercel/functions": "^3.10.3",
     "ajv": "^8.20.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
@@ -36,7 +36,7 @@
     "mammoth": "^1.13.0",
     "marked": "^18.1.1",
     "mermaid": "^12.2.0",
-    "next": "^16.4.2",
+    "next": "^16.4.3",
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
